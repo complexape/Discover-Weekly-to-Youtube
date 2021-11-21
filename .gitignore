@@ -1,2 +1,4 @@
 secrets.py
 client_secrets.json
+credentials.pickle
+__pycache__

@@ -1,31 +1,33 @@
 import os
-import json
 import base64
 import pickle
 from datetime import datetime
-from secrets import *
+
+from secrets import refresh_token, client_id, client_secret, discover_weekly_id
 
 import requests
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from googleapiclient.errors import HttpError
 
-class SaveSongs:
+class SpoitifyToYT:
     def __init__(self):
-        
         self.spotify_token = self.refresh_spotify()
 
+    # returns an access token given a client id and client secret
     def refresh_spotify(self):
         query = "https://accounts.spotify.com/api/token"
-        response = requests.post(query,
-        data={"grant_type": "refresh_token","refresh_token": refresh_token},
-        headers={"Authorization": "Basic " +  base64.b64encode(bytes(f"{client_id}:{client_secret}", "ISO-8859-1")).decode("ascii")})
+        response = requests.post( query,
+            data= {"grant_type": "refresh_token",
+                "refresh_token": refresh_token},
+            headers= {
+                "Authorization": "Basic " +  base64.b64encode(bytes(f"{client_id}:{client_secret}", "ISO-8859-1")).decode("ascii")})
         response_json = response.json()
         return response_json["access_token"]
         
-
     # returns discover weekly playlist items 
-    def find_songs(self):
+    def find_dw_songs(self):
         print("getting songs in discover weekly...")
         query = f"https://api.spotify.com/v1/playlists/{discover_weekly_id}/tracks"
         response = requests.get(query,
@@ -36,6 +38,7 @@ class SaveSongs:
     
     def refresh_youtube(self):
         credentials = None
+
         # loads in existing credentials if they exist
         if os.path.exists('credentials.pickle'):
             print('Loading Credentials From File...')
@@ -46,7 +49,7 @@ class SaveSongs:
         if not credentials or not credentials.valid:
             if credentials and credentials.expired and credentials.refresh_token:
                 print('Refreshing Access Token...')
-                credentials.refresh(Request())
+                credentials.refresh(Request()) 
             else:
                 print('Fetching New Tokens...')
                 flow = InstalledAppFlow.from_client_secrets_file(
@@ -58,6 +61,7 @@ class SaveSongs:
                 with open('credentials.pickle', 'wb') as f:
                     print('Saved New Credentials')
                     pickle.dump(credentials, f)
+
         return credentials
     
     def create_playlist(self, youtube):
@@ -65,48 +69,64 @@ class SaveSongs:
             part="snippet",
             body={
                 "snippet": {
-                    "title": "Spotify Discover Weekly"+datetime.now().strftime('%m/%d/%Y'),
-                    "description": "All Discover Weekly Tracks from Spotify"
+                    "title": "Spotify Discover Weekly "+datetime.now().strftime('%m/%d/%Y'),
+                    "description": "Your Discover Weekly Playlist imported to Youtube."
                 }
             }
         )
         playlist_reponse = create_playlist_request.execute()
         return playlist_reponse["id"]
-    
+
     def add_songs_to_playlist(self):
-        youtube = build('youtube', 'v3', credentials=self.refresh_youtube())
-
-        playlist_id = self.create_playlist(youtube)
-        response_items = self.find_songs()
+        # authorizes youtube and sets up playlist
+        credentials = self.refresh_youtube()
+        youtube = build('youtube', 'v3', credentials=credentials)
         
-        songsAdded = 0
-        for i in response_items:
-            search_name = f'{i["track"]["artists"][0]["name"]} {i["track"]["name"]}'
-            if (i["track"]["artists"].__len__() > 1):
-                search_name = f'{i["track"]["artists"][0]["name"]} {i["track"]["artists"][1]["name"]} {i["track"]["name"]}'
+        playlist_id = self.create_playlist(youtube)
 
-            # search for video on youtube
-            search_response = youtube.search().list(
-                part="snippet",q=search_name, maxResults=1, 
-                type='video', order='relevance'
-            ).execute()
+        spotify_songs = self.find_dw_songs()
+        try:
+            for n, i in enumerate(spotify_songs):
 
-            # add search result to the new playlist
-            youtube.playlistItems().insert(
-                part="snippet",
-                body={
-                'snippet': {
-                  'playlistId': playlist_id, 
-                  'resourceId': {
-                          'kind': 'youtube#video',
-                          'videoId': search_response["items"][0]["id"]["videoId"]
+                # searches on youtube by relevance using the query "artist-name song-name"
+                search_query = f'{i["track"]["name"]}'
+                for n, artist in enumerate(i["track"]["artists"]):
+                    search_query += f' {artist["name"]}'
+
+                search_response = youtube.search().list(
+                    part="snippet",q=search_query, maxResults=1, 
+                    type='video', order='relevance', topicId="/m/04rlf"
+                ).execute()
+
+                if not search_response:
+                    print(f"({n}/{len(spotify_songs)}) '{search_query}' NOT FOUND skipping...")
+                    continue
+                # add search result to the new playlist
+                youtube.playlistItems().insert(
+                    part="snippet",
+                    body={
+                    'snippet': {
+                    'playlistId': playlist_id, 
+                    'resourceId': {
+                            'kind': 'youtube#video',
+                            'videoId': search_response["items"][0]["id"]["videoId"]
+                            }
                         }
                     }
-                }
-            ).execute()
-            songsAdded+=1
-        print(f'{str(songsAdded)} Songs added.')
+                ).execute()
+                print(f"({n}/{len(spotify_songs)}) added '{search_query}' to playlist")
+        except HttpError as e:
+            # deletes incomplete playlist
+            youtube.playlists().delete(id=playlist_id).execute()
+            print(e)
+            exit()
+
+    
+        print(f"Complete! Link to playlist: {playlist_id}")
+
+def main():
+    save_songs = SpoitifyToYT()
+    save_songs.add_songs_to_playlist()
 
 if __name__ == '__main__':
-    save_songs = SaveSongs()
-    save_songs.add_songs_to_playlist()
+    main()
