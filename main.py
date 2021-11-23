@@ -2,6 +2,7 @@ import os
 import base64
 import pickle
 from datetime import datetime
+import time
 
 from secrets import refresh_token, client_id, client_secret, discover_weekly_id
 
@@ -81,16 +82,18 @@ class SpoitifyToYT:
         # authorizes youtube and sets up playlist
         credentials = self.refresh_youtube()
         youtube = build('youtube', 'v3', credentials=credentials)
-        
+
         playlist_id = self.create_playlist(youtube)
 
         spotify_songs = self.find_dw_songs()
+
+        time.sleep(1)
         try:
             for n, i in enumerate(spotify_songs):
 
                 # searches on youtube by relevance using the query "artist-name song-name"
                 search_query = f'{i["track"]["name"]}'
-                for n, artist in enumerate(i["track"]["artists"]):
+                for artist in i["track"]["artists"]:
                     search_query += f' {artist["name"]}'
 
                 search_response = youtube.search().list(
@@ -102,6 +105,7 @@ class SpoitifyToYT:
                     print(f"({n}/{len(spotify_songs)}) '{search_query}' NOT FOUND skipping...")
                     continue
                 # add search result to the new playlist
+                
                 youtube.playlistItems().insert(
                     part="snippet",
                     body={
@@ -114,15 +118,13 @@ class SpoitifyToYT:
                         }
                     }
                 ).execute()
-                print(f"({n}/{len(spotify_songs)}) added '{search_query}' to playlist")
+                print(f"({n+1}/{len(spotify_songs)}) added '{search_query}' to playlist")
         except HttpError as e:
-            # deletes incomplete playlist
+            # deletes incomplete playlist    
             youtube.playlists().delete(id=playlist_id).execute()
             print(e)
             exit()
-
-    
-        print(f"Complete! Link to playlist: {playlist_id}")
+        print(f"Complete! Link to playlist: https://www.youtube.com/playlist?list={playlist_id}")
 
 def main():
     save_songs = SpoitifyToYT()
