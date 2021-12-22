@@ -101,24 +101,23 @@ class SpoitifyToYT:
                     type='video', order='relevance', topicId="/m/04rlf"
                 ).execute()
 
-                if not search_response:
-                    print(f"({n}/{len(spotify_songs)}) '{search_query}' NOT FOUND skipping...")
-                    continue
-                # add search result to the new playlist
-                
-                youtube.playlistItems().insert(
-                    part="snippet",
-                    body={
-                    'snippet': {
-                    'playlistId': playlist_id, 
-                    'resourceId': {
-                            'kind': 'youtube#video',
-                            'videoId': search_response["items"][0]["id"]["videoId"]
+                try:
+                    id = search_response["items"][0]["id"]["videoId"]
+                    youtube.playlistItems().insert(
+                        part="snippet",
+                        body={
+                        'snippet': {
+                        'playlistId': playlist_id, 
+                        'resourceId': {
+                                'kind': 'youtube#video',
+                                'videoId': id
+                                }
                             }
                         }
-                    }
-                ).execute()
-                print(f"({n+1}/{len(spotify_songs)}) added '{search_query}' to playlist")
+                    ).execute()
+                    print(f"({n+1}/{len(spotify_songs)}) added '{search_query}' to playlist")
+                except IndexError:
+                    print(f"({n+1}/{len(spotify_songs)}) '{search_query}' could NOT be found, skipping...")
         except HttpError as e:
             # deletes incomplete playlist    
             youtube.playlists().delete(id=playlist_id).execute()
