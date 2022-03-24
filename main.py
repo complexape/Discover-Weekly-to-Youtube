@@ -138,9 +138,9 @@ def main():
     while True:
         spotify_id = playlist_id
         if not spotify_id:
-            spotify_id = input("Your Spotify playlist's id: ")
+            spotify_id = input("Your Spotify playlist id: ")
         spotify_playlist = spotify.find_playlist(spotify_id)
-        
+
         if not "error" in spotify_playlist:
             break
     
