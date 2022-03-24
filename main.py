@@ -135,9 +135,16 @@ def main():
     youtube = Youtube()
     spotify = Spotify(refresh_token, client_id, client_secret)
 
+    while True:
+        spotify_id = playlist_id
+        if not spotify_id:
+            spotify_id = input("Your Spotify playlist's id: ")
+        spotify_playlist = spotify.find_playlist(spotify_id)
+        
+        if not "error" in spotify_playlist:
+            break
+    
     print("Getting Spotify playlist information...")
-    spotify_playlist = spotify.find_playlist(playlist_id)
-
     song_items = spotify_playlist["tracks"]["items"]
     youtube_id = youtube.create_playlist(
         spotify_playlist["name"], 
