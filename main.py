@@ -1,3 +1,4 @@
+from imp import create_dynamic
 import os
 import base64
 import pickle
@@ -67,6 +68,8 @@ class Youtube:
     def refresh_credentials(self):
         """Gets and/or refreshes your Youtube API credentials."""
 
+        credentials = None
+        
         # loads in existing credentials if they exist
         if os.path.exists('credentials.pickle'):
             print('Loading Credentials From File...')
@@ -172,7 +175,7 @@ def main():
         print(e)
         if input("Playlist is incomplete. Keep it anyways? (Y/n)").lower() not in ["y" or "yes"]: 
             youtube.playlists().delete(id=youtube_id).execute()
-        exit()
+            exit()
     
     print(f"Complete! \nLink to playlist: https://www.youtube.com/playlist?list={youtube_id}")
 
